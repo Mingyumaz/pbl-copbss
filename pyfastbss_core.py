@@ -1,7 +1,6 @@
 import numpy as np
 import math
 
-
 '''
 # FAST BSS Version 0.1.0:
 
@@ -224,6 +223,80 @@ class FastbssBasic():
                 break
         return B, lim
 
+# Meica in computer network
+class MultiLevelExtractionICA_dev(FastbssBasic):
+
+    def newton_iteration_auto_break_dev(self, B, X, max_iter, tol, break_coef):
+        '''
+        # newton_iteration_auto_break_dev(self, B, X, max_iter, break_coef):
+
+        # Usage:
+
+            Newton iteration part for BSS, the iteration jumps out
+            automatically when the convergence decrease slower.
+
+        # Parameters:
+
+            B: Separation matrix.
+            X: Whitened mixed signals.
+            max_iter: Maximum number of iteration.
+            break_coef: The paramter, which determine when the iteration
+                should jump out.
+
+        # Output:
+
+            B,lim
+            B: Separation matrix B.
+            lim: Convergence of the iteration.
+        '''
+        _sum = 0
+        _max = 0
+        for _ in range(max_iter):
+            B, lim = self._iteration(B, X)
+            self.Stack.append(lim)
+            if lim > _max:
+                _max = lim
+                self.Stack = [lim]
+                _sum = 0
+            _sum += lim
+            if _sum < break_coef*0.5*(self.Stack[0]+self.Stack[-1])*len(self.Stack) or self.Stack[-1] < tol:
+                break
+        return B, self.Stack[-1]
+
+    def meica_dev(self, X, max_iter=100, tol=1e-04, break_coef=0.9, ext_multi_ica=8):
+
+        self.Stack = []
+        B = self.meica_server(X, max_iter, tol, break_coef, ext_multi_ica)
+        S = np.dot(B, X)
+        return S
+
+    def meica_server(self, X, max_iter, tol, break_coef, _ext_multi_ica):
+       
+        _B = self.generate_initial_matrix_B_dev(X)        
+        n, m = X.shape
+        _grad = int(math.log(m//n, _ext_multi_ica))
+        _prop_series = _ext_multi_ica**np.arange(_grad, -1, -1)
+
+        for i in range(1, _grad+1):
+            _X = X[:, ::_prop_series[i]]
+            _B, _lim = meica_slave( _X, _B, i, max_iter, tol, break_coef, _ext_multi_ica)
+            #于此处增加判断，若达到要求精度则取消循环计算，将计算结果上交
+            if _lim < tol:
+                break
+        return _B
+
+    def meica_slave(self, _X, B_0, number, max_iter, _tol, break_coef, _ext_multi_ica):
+
+        #SlaveNumber = number
+        #print(SlaveNumber) 
+        _X, V, V_inv = self.whiten_with_inv_V(_X)
+        B_1 = self.decorrelation(np.dot(B_0, V_inv))
+        self.Stack = []
+        B_1, _lim = self.newton_iteration_auto_break_dev(
+            B_0, _X, max_iter, _tol, break_coef)[0]
+        B_1 = np.dot(B_1, V)
+        
+        return B_1, _lim
 
 # version3.0
 class MultiLevelExtractionICA(FastbssBasic):
