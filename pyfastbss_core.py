@@ -251,6 +251,8 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
         '''
         _sum = 0
         _max = 0
+        sin = False
+
         for _ in range(max_iter):
             B, lim = self._iteration(B, X)
             self.Stack.append(lim)
@@ -259,9 +261,12 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
                 self.Stack = [lim]
                 _sum = 0
             _sum += lim
-            if _sum < break_coef*0.5*(self.Stack[0]+self.Stack[-1])*len(self.Stack) or self.Stack[-1] < tol:
+            if self.Stack[-1] < tol:
+                sin = True
                 break
-        return B, self.Stack[-1]
+            if _sum < break_coef*0.5*(self.Stack[0]+self.Stack[-1])*len(self.Stack):
+                break
+        return B, sin
 
     def meica_dev(self, X, max_iter=100, tol=1e-04, break_coef=0.9, ext_multi_ica=8):
 
@@ -272,16 +277,16 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
 
     def meica_server(self, X, max_iter, tol, break_coef, _ext_multi_ica):
        
-        _B = self.generate_initial_matrix_B_dev(X)        
+        _B = self.generate_initial_matrix_B(X)        
         n, m = X.shape
         _grad = int(math.log(m//n, _ext_multi_ica))
         _prop_series = _ext_multi_ica**np.arange(_grad, -1, -1)
 
         for i in range(1, _grad+1):
             _X = X[:, ::_prop_series[i]]
-            _B, _lim = meica_slave( _X, _B, i, max_iter, tol, break_coef, _ext_multi_ica)
+            _B, sin = self.meica_slave( _X, _B, i, max_iter, tol, break_coef, _ext_multi_ica)
             #于此处增加判断，若达到要求精度则取消循环计算，将计算结果上交
-            if _lim < tol:
+            if sin == True:
                 break
         return _B
 
@@ -292,11 +297,11 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
         _X, V, V_inv = self.whiten_with_inv_V(_X)
         B_1 = self.decorrelation(np.dot(B_0, V_inv))
         self.Stack = []
-        B_1, _lim = self.newton_iteration_auto_break_dev(
-            B_0, _X, max_iter, _tol, break_coef)[0]
+        B_1, sin = self.newton_iteration_auto_break_dev(
+            B_0, _X, max_iter, _tol, break_coef)
         B_1 = np.dot(B_1, V)
         
-        return B_1, _lim
+        return B_1, sin
 
 # version3.0
 class MultiLevelExtractionICA(FastbssBasic):
@@ -672,7 +677,7 @@ class FastICA(FastbssBasic):
         return S2
 
 
-class PyFastbss(MultiLevelExtractionICA, UltraFastICA, FastICA):
+class PyFastbss(MultiLevelExtractionICA, UltraFastICA, FastICA, MultiLevelExtractionICA_dev):
 
     def fastbss(self, method, X, max_iter=100, tol=1e-04, break_coef=0.9, ext_initial_matrix=0, ext_adapt_ica=100, ext_multi_ica=8):
         if method == 'fastica':
@@ -685,6 +690,8 @@ class PyFastbss(MultiLevelExtractionICA, UltraFastICA, FastICA):
             return self.aeica(X, max_iter, tol, ext_adapt_ica)
         elif method == 'ufica':
             return self.ufica(X, max_iter, tol, ext_initial_matrix, ext_adapt_ica)
+        elif method == 'meica_dev':
+            return self.meica_dev(X, max_iter, tol, break_coef, ext_multi_ica)
         else:
             print('Method Identification Error!')
             return None
