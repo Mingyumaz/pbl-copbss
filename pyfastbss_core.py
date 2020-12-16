@@ -261,10 +261,11 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
                 self.Stack = [lim]
                 _sum = 0
             _sum += lim
+            
             if self.Stack[-1] < tol:
                 sin = True
                 break
-            if _sum < break_coef*0.5*(self.Stack[0]+self.Stack[-1])*len(self.Stack):
+            elif _sum < break_coef*0.5*(self.Stack[0]+self.Stack[-1])*len(self.Stack):
                 break
         return B, sin
 
@@ -286,19 +287,17 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
             _X = X[:, ::_prop_series[i]]
             _B, sin = self.meica_slave( _X, _B, i, max_iter, tol, break_coef, _ext_multi_ica)
             #于此处增加判断，若达到要求精度则取消循环计算，将计算结果上交
-            if sin == True:
-                break
+#            if sin == True:
+#                break
         return _B
 
     def meica_slave(self, _X, B_0, number, max_iter, _tol, break_coef, _ext_multi_ica):
 
-        #SlaveNumber = number
-        #print(SlaveNumber) 
         _X, V, V_inv = self.whiten_with_inv_V(_X)
         B_1 = self.decorrelation(np.dot(B_0, V_inv))
         self.Stack = []
         B_1, sin = self.newton_iteration_auto_break_dev(
-            B_0, _X, max_iter, _tol, break_coef)
+            B_1, _X, max_iter, _tol, break_coef)
         B_1 = np.dot(B_1, V)
         
         return B_1, sin
