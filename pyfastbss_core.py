@@ -228,7 +228,7 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
 
     def newton_iteration_auto_break_dev(self, B, X, max_iter, tol, break_coef):
         '''
-        # newton_iteration_auto_break_dev(self, B, X, max_iter, break_coef):
+        # newton_iteration_auto_break_dev(self, B, X, max_iter, tol, break_coef):
 
         # Usage:
 
@@ -262,6 +262,8 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
                 _sum = 0
             _sum += lim
             
+            # there we think the tol doesn't suit for each dataset and corresponding dataset with different
+            # sampling interval
             if self.Stack[-1] < tol:
                 sin = True
                 break
@@ -286,9 +288,11 @@ class MultiLevelExtractionICA_dev(FastbssBasic):
         for i in range(1, _grad+1):
             _X = X[:, ::_prop_series[i]]
             _B, sin = self.meica_slave( _X, _B, i, max_iter, tol, break_coef, _ext_multi_ica)
-            #于此处增加判断，若达到要求精度则取消循环计算，将计算结果上交
-#            if sin == True:
-#                break
+
+            # there we think the tol doesn't suit for each dataset and corresponding dataset with different
+            # sampling interval, see this in function: newton_iteration_auto_break_dev
+            #if sin == True:
+            #    break
         return _B
 
     def meica_slave(self, _X, B_0, number, max_iter, _tol, break_coef, _ext_multi_ica):
