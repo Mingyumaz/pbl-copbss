@@ -1,7 +1,6 @@
 import numpy as np
 import math
 
-
 '''
 # FAST BSS Version 0.1.0:
 
@@ -224,6 +223,88 @@ class FastbssBasic():
                 break
         return B, lim
 
+# Meica in computer network
+class MultiLevelExtractionICA_dev(FastbssBasic):
+
+    def newton_iteration_auto_break_dev(self, B, X, max_iter, tol, break_coef):
+        '''
+        # newton_iteration_auto_break_dev(self, B, X, max_iter, tol, break_coef):
+
+        # Usage:
+
+            Newton iteration part for BSS, the iteration jumps out
+            automatically when the convergence decrease slower.
+
+        # Parameters:
+
+            B: Separation matrix.
+            X: Whitened mixed signals.
+            max_iter: Maximum number of iteration.
+            break_coef: The paramter, which determine when the iteration
+                should jump out.
+
+        # Output:
+
+            B,lim
+            B: Separation matrix B.
+            lim: Convergence of the iteration.
+        '''
+        _sum = 0
+        _max = 0
+        sin = False
+
+        for _ in range(max_iter):
+            B, lim = self._iteration(B, X)
+            self.Stack.append(lim)
+            if lim > _max:
+                _max = lim
+                self.Stack = [lim]
+                _sum = 0
+            _sum += lim
+            
+            # there we think the tol doesn't suit for each dataset and corresponding dataset with different
+            # sampling interval
+            if self.Stack[-1] < tol:
+                sin = True
+                break
+            elif _sum < break_coef*0.5*(self.Stack[0]+self.Stack[-1])*len(self.Stack):
+                break
+        return B, sin
+
+    def meica_dev(self, X, max_iter=100, tol=1e-04, break_coef=0.9, ext_multi_ica=8):
+
+        self.Stack = []
+        B = self.meica_server(X, max_iter, tol, break_coef, ext_multi_ica)
+        S = np.dot(B, X)
+        return S
+
+    def meica_server(self, X, max_iter, tol, break_coef, _ext_multi_ica):
+       
+        _B = self.generate_initial_matrix_B(X)        
+        n, m = X.shape
+        _grad = int(math.log(m//n, _ext_multi_ica))
+        _prop_series = _ext_multi_ica**np.arange(_grad, -1, -1)
+
+        for i in range(1, _grad+1):
+            _X = X[:, ::_prop_series[i]]
+            _B, sin = self.meica_slave( _X, _B, i, max_iter, tol, break_coef, _ext_multi_ica)
+
+            # there we think the tol doesn't suit for each dataset and corresponding dataset with different
+            # sampling interval, see this in function: newton_iteration_auto_break_dev
+            #if sin == True:
+            #    break
+        return _B
+
+    def meica_slave(self, _X, B_0, number, max_iter, _tol, break_coef, _ext_multi_ica):
+
+        _X, V, V_inv = self.whiten_with_inv_V(_X)
+        B_1 = self.decorrelation(np.dot(B_0, V_inv))
+        self.Stack = []
+        B_1, sin = self.newton_iteration_auto_break_dev(
+            B_1, _X, max_iter, _tol, break_coef)
+        B_1 = np.dot(B_1, V)
+        
+        return B_1, sin
 
 # version3.0
 class MultiLevelExtractionICA(FastbssBasic):
@@ -599,7 +680,7 @@ class FastICA(FastbssBasic):
         return S2
 
 
-class PyFastbss(MultiLevelExtractionICA, UltraFastICA, FastICA):
+class PyFastbss(MultiLevelExtractionICA, UltraFastICA, FastICA, MultiLevelExtractionICA_dev):
 
     def fastbss(self, method, X, max_iter=100, tol=1e-04, break_coef=0.9, ext_initial_matrix=0, ext_adapt_ica=100, ext_multi_ica=8):
         if method == 'fastica':
@@ -612,6 +693,8 @@ class PyFastbss(MultiLevelExtractionICA, UltraFastICA, FastICA):
             return self.aeica(X, max_iter, tol, ext_adapt_ica)
         elif method == 'ufica':
             return self.ufica(X, max_iter, tol, ext_initial_matrix, ext_adapt_ica)
+        elif method == 'meica_dev':
+            return self.meica_dev(X, max_iter, tol, break_coef, ext_multi_ica)
         else:
             print('Method Identification Error!')
             return None
